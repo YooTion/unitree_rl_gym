@@ -662,17 +662,22 @@ class LeggedRobot(BaseTask):
         base_height = self.root_states[:, 2]
         return torch.square(base_height - self.cfg.rewards.base_height_target)
     
+    def _reward_target_height(self):
+        # Penalize base height away from target
+        target_height = self.root_states[:, 2]
+        return target_height
+    
     def _reward_torques(self):
         # Penalize torques
         return torch.sum(torch.square(self.torques), dim=1)
 
     def _reward_dof_vel(self):
         # Penalize dof velocities
-        return torch.sum(torch.square(self.dof_vel), dim=1)
+        return torch.sum(torch.square(self.dof_vel[:,:2]), dim=1)
     
     def _reward_dof_acc(self):
         # Penalize dof accelerations
-        return torch.sum(torch.square((self.last_dof_vel - self.dof_vel) / self.dt), dim=1)
+        return torch.sum(torch.square((self.last_dof_vel[:,:2] - self.dof_vel[:,:2]) / self.dt), dim=1)
     
     def _reward_action_rate(self):
         # Penalize changes in actions
