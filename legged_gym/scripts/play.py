@@ -95,7 +95,7 @@ def play(args):
         camera_height = 0.8
         camera_pos = np.array([
             robot_pos[0],  # 侧面视角
-            robot_pos[1] - camera_distance,
+            robot_pos[1] + camera_distance,
             robot_pos[2] + camera_height
         ])
         
