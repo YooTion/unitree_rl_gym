@@ -28,6 +28,7 @@ class G1RoughCfg23( LeggedRobotCfg ):
            'right_elbow_joint': 0.9,
            'right_wrist_roll_joint': 0.0
         }
+        
     
     class env(LeggedRobotCfg.env):
         num_observations = 78
