@@ -88,6 +88,7 @@ class G1RoughCfg( LeggedRobotCfg ):
             # feet_swing_height = -20.0
             contact = 0.18
             target_height = 1.0
+            
 
 class G1RoughCfgPPO( LeggedRobotCfgPPO ):
     class policy:
