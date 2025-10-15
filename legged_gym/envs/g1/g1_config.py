@@ -63,7 +63,7 @@ class G1RoughCfg( LeggedRobotCfg ):
         measured_points_y = [-0.5, -0.4, -0.3, -0.2, -0.1, 0., 0.1, 0.2, 0.3, 0.4, 0.5]
         selected = False # select a unique terrain type and pass all arguments
         terrain_kwargs = None # Dict of arguments for selected terrain
-        max_init_terrain_level = 5 # starting curriculum state
+        max_init_terrain_level = 2 # starting curriculum state
         terrain_length = 8.
         terrain_width = 8.
         num_rows= 10 # number of terrain rows (levels)
@@ -170,7 +170,7 @@ class G1RoughCfgPPO( LeggedRobotCfgPPO ):
         policy_class_name = "ActorCritic"
         algorithm_class_name = 'PPO'
         num_steps_per_env = 60  # per iteration
-        max_iterations = 15000
+        max_iterations = 10000
         run_name = ''
         experiment_name = 'g1'
 

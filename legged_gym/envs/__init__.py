@@ -7,10 +7,6 @@ from legged_gym.envs.h1_2.h1_2_config import H1_2RoughCfg, H1_2RoughCfgPPO
 from legged_gym.envs.h1_2.h1_2_env import H1_2Robot
 from legged_gym.envs.g1.g1_config import G1RoughCfg, G1RoughCfgPPO
 from legged_gym.envs.g1.g1_env import G1Robot
-from legged_gym.envs.g1.g1_amp_config import G1AMPCfg, G1AMPCfgPPO
-from legged_gym.envs.g1.g1_amp_env import G1AMPRobot
-from legged_gym.envs.g1.g1_config_23 import G1RoughCfg23, G1RoughCfgPPO23
-from legged_gym.envs.g1.g1_env_23 import G1Robot23
 from .base.legged_robot import LeggedRobot
 
 from legged_gym.utils.task_registry import task_registry

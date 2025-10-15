@@ -84,7 +84,7 @@ class Terrain:
                                 horizontal_scale=self.cfg.horizontal_scale)
         slope = difficulty * 0.4
         step_height = 0.05 + 0.10 * difficulty
-        # step_height = 0.14
+        # step_height = 0.12
         discrete_obstacles_height = 0.05 + difficulty * 0.2
         stepping_stones_size = 1.5 * (1.05 - difficulty)
         stone_distance = 0.05 if difficulty==0 else 0.1
@@ -100,7 +100,7 @@ class Terrain:
         elif choice < self.proportions[3]:
             if choice<self.proportions[2]:
                 step_height *= -1
-            terrain_utils.pyramid_stairs_terrain(terrain, step_width=0.31, step_height=step_height, platform_size=3.)
+            terrain_utils.pyramid_stairs_terrain(terrain, step_width=0.3, step_height=step_height, platform_size=3.)
         elif choice < self.proportions[4]:
             num_rectangles = 20
             rectangle_min_size = 1.
