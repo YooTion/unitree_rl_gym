@@ -1,11 +1,11 @@
 import time
-
 import mujoco.viewer
 import mujoco
 import numpy as np
 from legged_gym import LEGGED_GYM_ROOT_DIR
 import torch
 import yaml
+from pynput import keyboard  # 用于监听键盘输入
 
 
 def get_gravity_orientation(quaternion):
@@ -26,6 +26,33 @@ def get_gravity_orientation(quaternion):
 def pd_control(target_q, q, kp, target_dq, dq, kd):
     """Calculates torques from position commands"""
     return (target_q - q) * kp + (target_dq - dq) * kd
+
+
+# 全局变量
+current_speed = 0.0
+key_pressed = False
+max_speed = 1.0  # 最大速度
+acceleration = 0.1  # 加速度
+
+
+def on_press(key):
+    """键盘按下事件"""
+    global key_pressed
+    try:
+        if key.char == "w":  # 按下 "w" 键
+            key_pressed = True
+    except AttributeError:
+        pass
+
+
+def on_release(key):
+    """键盘松开事件"""
+    global key_pressed
+    try:
+        if key.char == "w":  # 松开 "w" 键
+            key_pressed = False
+    except AttributeError:
+        pass
 
 
 if __name__ == "__main__":
@@ -72,25 +99,42 @@ if __name__ == "__main__":
     m = mujoco.MjModel.from_xml_path(xml_path)
     d = mujoco.MjData(m)
     m.opt.timestep = simulation_dt
+    n_joints = m.njnt
+    for i in range(n_joints):
+        # 获取关节名称
+        joint_name = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_JOINT, i)
+        # 打印关节名称
+        print(f'关节 {i}: {joint_name}\r')
 
     # load policy
     policy = torch.jit.load(policy_path)
+
+    # 启动键盘监听器
+    listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+    listener.start()
 
     with mujoco.viewer.launch_passive(m, d) as viewer:
         # Close the viewer automatically after simulation_duration wall-seconds.
         start = time.time()
         while viewer.is_running() and time.time() - start < simulation_duration:
             step_start = time.time()
+
+            # 根据键盘输入调整速度
+            if key_pressed:  # 按下 "w" 键加速
+                current_speed = min(current_speed + acceleration * 1, max_speed)
+            else:  # 松开键盘时速度归零
+                current_speed = 0.0
+
+            # 更新速度指令
+            cmd[0] = current_speed  # 假设 cmd[0] 是线速度指令
+
             tau = pd_control(target_dof_pos, d.qpos[7:], kps, np.zeros_like(kds), d.qvel[6:], kds)
             d.ctrl[:] = tau
-            # mj_step can be replaced with code that also evaluates
-            # a policy and applies a control signal before stepping the physics.
+
             mujoco.mj_step(m, d)
 
             counter += 1
             if counter % control_decimation == 0:
-                # Apply control signal here.
-
                 # create observation
                 qj = d.qpos[7:]
                 dqj = d.qvel[6:]
@@ -107,6 +151,7 @@ if __name__ == "__main__":
                 phase = count % period / period
                 sin_phase = np.sin(2 * np.pi * phase)
                 cos_phase = np.cos(2 * np.pi * phase)
+                print("cmd", cmd)
 
                 obs[:3] = omega
                 obs[3:6] = gravity_orientation
@@ -114,17 +159,18 @@ if __name__ == "__main__":
                 obs[9 : 9 + num_actions] = qj
                 obs[9 + num_actions : 9 + 2 * num_actions] = dqj
                 obs[9 + 2 * num_actions : 9 + 3 * num_actions] = action
-                # obs[9 + 3 * num_actions : 9 + 3 * num_actions + 2] = np.array([sin_phase, cos_phase])
                 obs_tensor = torch.from_numpy(obs).unsqueeze(0)
                 # policy inference
                 action = policy(obs_tensor).detach().numpy().squeeze()
                 # transform action to target_dof_pos
                 target_dof_pos = action * action_scale + default_angles
 
-            # Pick up changes to the physics state, apply perturbations, update options from GUI.
             viewer.sync()
 
             # Rudimentary time keeping, will drift relative to wall clock.
             time_until_next_step = m.opt.timestep - (time.time() - step_start)
             if time_until_next_step > 0:
                 time.sleep(time_until_next_step)
+
+    # 停止键盘监听器
+    listener.stop()

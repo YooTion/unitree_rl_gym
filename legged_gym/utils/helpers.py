@@ -147,18 +147,41 @@ def get_args():
         args.sim_device += f":{args.sim_device_id}"
     return args
 
-def export_policy_as_jit(actor_critic, path):
-    if hasattr(actor_critic, 'memory_a'):
-        # assumes LSTM: TODO add GRU
-        exporter = PolicyExporterLSTM(actor_critic)
-        exporter.export(path)
-    else: 
-        os.makedirs(path, exist_ok=True)
-        path = os.path.join(path, 'policy_1.pt')
-        model = copy.deepcopy(actor_critic.actor).to('cpu')
-        traced_script_module = torch.jit.script(model)
-        traced_script_module.save(path)
+# def export_policy_as_jit(actor_critic, path):
+#     if hasattr(actor_critic, 'memory_a'):
+#         # assumes LSTM: TODO add GRU
+#         exporter = PolicyExporterLSTM(actor_critic)
+#         exporter.export(path)
+#     else: 
+#         os.makedirs(path, exist_ok=True)
+#         path = os.path.join(path, 'policy_1.pt')
+#         model = copy.deepcopy(actor_critic.actor).to('cpu')
+#         traced_script_module = torch.jit.script(model)
+#         traced_script_module.save(path)
 
+# def export_policy_as_jit(actor_critic, path):
+#     if hasattr(actor_critic, 'memory_a'):
+#         # Check if it's LSTM or GRU
+#         if isinstance(actor_critic.memory_a.rnn, torch.nn.LSTM):
+#             exporter = PolicyExporterLSTM(actor_critic)
+#         elif isinstance(actor_critic.memory_a.rnn, torch.nn.GRU):
+#             exporter = PolicyExporterGRU(actor_critic)
+#         else:
+#             raise ValueError("Unsupported RNN type. Only LSTM and GRU are supported.")
+#         exporter.export(path)
+#     else: 
+#         os.makedirs(path, exist_ok=True)
+#         path = os.path.join(path, 'policy_1.pt')
+#         model = copy.deepcopy(actor_critic.actor).to('cpu')
+#         traced_script_module = torch.jit.script(model)
+#         traced_script_module.save(path)
+
+def export_policy_as_jit(actor_critic, path):
+    os.makedirs(path, exist_ok=True)
+    path = os.path.join(path, 'policy_g1.pt')
+    model = copy.deepcopy(actor_critic.actor).to('cpu')
+    traced_script_module = torch.jit.script(model)
+    traced_script_module.save(path)
 
 class PolicyExporterLSTM(torch.nn.Module):
     def __init__(self, actor_critic):
@@ -184,6 +207,33 @@ class PolicyExporterLSTM(torch.nn.Module):
     def export(self, path):
         os.makedirs(path, exist_ok=True)
         path = os.path.join(path, 'policy_lstm_1.pt')
+        self.to('cpu')
+        traced_script_module = torch.jit.script(self)
+        traced_script_module.save(path)
+
+class PolicyExporterGRU(torch.nn.Module):
+    def __init__(self, actor_critic):
+        super().__init__()
+        self.actor = copy.deepcopy(actor_critic.actor)
+        self.is_recurrent = actor_critic.is_recurrent
+        self.memory = copy.deepcopy(actor_critic.memory_a.rnn)
+        self.memory.cpu()
+        # GRU only has hidden state, no cell state
+        self.register_buffer('hidden_state', torch.zeros(self.memory.num_layers, 1, self.memory.hidden_size))
+
+    def forward(self, x):
+        # GRU only returns (output, hidden_state) unlike LSTM which returns (output, (hidden_state, cell_state))
+        out, h = self.memory(x.unsqueeze(0), self.hidden_state)
+        self.hidden_state[:] = h
+        return self.actor(out.squeeze(0))
+
+    @torch.jit.export
+    def reset_memory(self):
+        self.hidden_state[:] = 0.
+    
+    def export(self, path):
+        os.makedirs(path, exist_ok=True)
+        path = os.path.join(path, 'policy_gru_1.pt')
         self.to('cpu')
         traced_script_module = torch.jit.script(self)
         traced_script_module.save(path)

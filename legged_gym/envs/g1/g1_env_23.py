@@ -47,13 +47,13 @@ class G1Robot23(LeggedRobot):
         self.add_noise = self.cfg.noise.add_noise
         noise_scales = self.cfg.noise.noise_scales
         noise_level = self.cfg.noise.noise_level
-        noise_vec[:3] = noise_scales.ang_vel * noise_level * self.obs_scales.ang_vel
-        noise_vec[3:6] = noise_scales.gravity * noise_level
-        noise_vec[6:9] = 0. # commands
-        noise_vec[9:9+self.num_actions] = noise_scales.dof_pos * noise_level * self.obs_scales.dof_pos
-        noise_vec[9+self.num_actions:9+2*self.num_actions] = noise_scales.dof_vel * noise_level * self.obs_scales.dof_vel
-        noise_vec[9+2*self.num_actions:9+3*self.num_actions] = 0. # previous actions
-        noise_vec[9+3*self.num_actions:9+3*self.num_actions+2] = 0. # sin/cos phase
+        noise_vec[:3] = noise_scales.lin_vel * noise_level * self.obs_scales.lin_vel
+        noise_vec[3:6] = noise_scales.ang_vel * noise_level * self.obs_scales.ang_vel
+        noise_vec[6:9] = noise_scales.gravity * noise_level
+        noise_vec[9:12] = 0. # commands
+        noise_vec[12:12+self.num_actions] = noise_scales.dof_pos * noise_level * self.obs_scales.dof_pos
+        noise_vec[12+self.num_actions:12+2*self.num_actions] = noise_scales.dof_vel * noise_level * self.obs_scales.dof_vel
+        noise_vec[12+2*self.num_actions:12+3*self.num_actions] = 0. # previous actions
         
         return noise_vec
 
@@ -72,6 +72,8 @@ class G1Robot23(LeggedRobot):
     def _init_buffers(self):
         super()._init_buffers()
         self._init_foot()
+        self.joint_names = self.gym.get_actor_joint_names(self.envs[0], self.actor_handles[0])
+        print("所有关节名称:", self.joint_names)
 
 
     def check_termination(self):
@@ -210,8 +212,8 @@ class G1Robot23(LeggedRobot):
         tm_params.restitution = self.cfg.terrain.restitution
         self.gym.add_triangle_mesh(self.sim, self.terrain.vertices.flatten(order='C'), self.terrain.triangles.flatten(order='C'), tm_params)
         self.height_samples = torch.tensor(self.terrain.heightsamples).view(self.terrain.tot_rows, self.terrain.tot_cols).to(self.device)
-
-        
+    
+    # ================================================ Rewards ================================================== #
     def _reward_contact(self):
         res = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
         for i in range(self.feet_num):
@@ -219,7 +221,6 @@ class G1Robot23(LeggedRobot):
             contact = self.contact_forces[:, self.feet_indices[i], 2] > 1
             res += ~(contact ^ is_stance)
         return res
-    
     
     def _reward_feet_swing_height(self):
         contact = torch.norm(self.contact_forces[:, self.feet_indices, :3], dim=2) > 1.
@@ -277,3 +278,47 @@ class G1Robot23(LeggedRobot):
         contact_vel_xy = torch.norm(self.feet_vel[:, :, :2], dim=2) * contact
         return torch.sum(contact_vel_xy, dim=1)
     
+    # ================================================ Rewards unique ================================================== #
+    def _reward_no_movement_when_stationary(self):
+        """
+        Reward for minimizing movement when the robot's current velocity is zero.
+        Penalizes joint velocities and deviations from default positions.
+        """
+        # Check if the robot's linear and angular velocities are close to zero
+        is_stationary = torch.norm(self.base_lin_vel, dim=1) < 0.1  # Linear velocity threshold
+        # is_stationary &= torch.norm(self.base_ang_vel, dim=1) < 0.1  # Angular velocity threshold
+
+        # Penalize joint velocities when stationary
+        joint_vel_penalty = torch.sum(torch.square(self.dof_vel), dim=1)
+
+        # Penalize deviations from default joint positions when stationary
+        joint_pos_penalty = torch.sum(torch.square(self.dof_pos - self.default_dof_pos), dim=1)
+
+        # Combine penalties and apply only when stationary
+        total_penalty = (joint_vel_penalty + joint_pos_penalty) * is_stationary
+        # print("total_penalty----------------",total_penalty)
+
+        # Return the negative penalty as a reward
+        return total_penalty
+    
+    def _reward_large_stride(self):
+        """
+        Reward for increasing stride length without target limit.
+        Encourages the robot to take longer steps by measuring the horizontal distance traveled by the feet.
+        """
+        # Calculate the horizontal displacement (x, y) of each foot since the last step
+        foot_displacement = torch.norm(self.feet_pos[:, :, :2] - self.last_feet_pos[:, :, :2], dim=2)
+        
+        # Use the maximum displacement among all feet as the stride length
+        stride_length = torch.max(foot_displacement, dim=1)[0]
+        
+        # Normalize stride length by a reference value and clip
+        normalized_stride = torch.clamp(stride_length / 0.8, 0, 1.5)  # 0.8m as reference
+        
+        # Quadratic reward to favor larger strides
+        reward_stride = normalized_stride ** 2
+        
+        # Update the last foot positions for the next step
+        self.last_feet_pos = self.feet_pos.clone()
+        
+        return reward_stride

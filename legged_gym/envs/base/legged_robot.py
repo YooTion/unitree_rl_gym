@@ -141,6 +141,11 @@ class LeggedRobot(BaseTask):
         self._reset_root_states(env_ids)
 
         self._resample_commands(env_ids)
+        if self.cfg.domain_rand.randomize_gains:
+            new_randomized_gains = self.compute_randomized_gains(len(env_ids))
+            self.randomized_p_gains[env_ids] = new_randomized_gains[0]
+            self.randomized_d_gains[env_ids] = new_randomized_gains[1]
+
 
         # reset buffers
         self.actions[env_ids] = 0.
@@ -159,6 +164,21 @@ class LeggedRobot(BaseTask):
         # send timeout info to the algorithm
         if self.cfg.env.send_timeouts:
             self.extras["time_outs"] = self.time_out_buf
+
+    def compute_randomized_gains(self, num_envs):
+        p_mult = ((
+            self.cfg.domain_rand.stiffness_multiplier_range[0] -
+            self.cfg.domain_rand.stiffness_multiplier_range[1]) *
+            torch.rand(num_envs, self.num_actions, device=self.device) +
+            self.cfg.domain_rand.stiffness_multiplier_range[1]).float()
+        d_mult = ((
+            self.cfg.domain_rand.damping_multiplier_range[0] -
+            self.cfg.domain_rand.damping_multiplier_range[1]) *
+            torch.rand(num_envs, self.num_actions, device=self.device) +
+            self.cfg.domain_rand.damping_multiplier_range[1]).float()
+        
+        return p_mult * self.p_gains, d_mult * self.d_gains    
+
     
     def compute_reward(self):
         """ Compute rewards
@@ -262,6 +282,9 @@ class LeggedRobot(BaseTask):
                 r = self.dof_pos_limits[i, 1] - self.dof_pos_limits[i, 0]
                 self.dof_pos_limits[i, 0] = m - 0.5 * r * self.cfg.rewards.soft_dof_pos_limit
                 self.dof_pos_limits[i, 1] = m + 0.5 * r * self.cfg.rewards.soft_dof_pos_limit
+                props["damping"][i] = self.cfg.asset.damping
+                props["armature"][i] = self.cfg.asset.armature
+                props["friction"][i] = self.cfg.asset.friction_loss
         return props
 
     def _process_rigid_body_props(self, props, env_id):
@@ -464,8 +487,7 @@ class LeggedRobot(BaseTask):
         if self.cfg.terrain.measure_heights:
             self.height_points = self._init_height_points()
         self.measured_heights = 0
-
-      
+        self.last_feet_pos = torch.zeros(self.num_envs, self.feet_indices.shape[0], 3, dtype=torch.float, device=self.device, requires_grad=False)
 
         # joint positions offsets and PD gains
         self.default_dof_pos = torch.zeros(self.num_dof, dtype=torch.float, device=self.device, requires_grad=False)
@@ -485,6 +507,9 @@ class LeggedRobot(BaseTask):
                 if self.cfg.control.control_type in ["P", "V"]:
                     print(f"PD gain of joint {name} were not defined, setting them to zero")
         self.default_dof_pos = self.default_dof_pos.unsqueeze(0)
+
+        if self.cfg.domain_rand.randomize_gains:
+            self.randomized_p_gains, self.randomized_d_gains = self.compute_randomized_gains(self.num_envs)
 
     def _prepare_reward_function(self):
         """ Prepares a list of reward functions, whcih will be called to compute the total reward.
@@ -682,6 +707,10 @@ class LeggedRobot(BaseTask):
         # Penalize changes in actions
         return torch.sum(torch.square(self.last_actions - self.actions), dim=1)
     
+    def _reward_upper_action_rate(self):
+        # Penalize changes in actions
+        return torch.sum(torch.square(self.last_actions[:,12:] - self.actions[:,12:]), dim=1)
+    
     def _reward_collision(self):
         # Penalize collisions on selected bodies
         return torch.sum(1.*(torch.norm(self.contact_forces[:, self.penalised_contact_indices, :], dim=-1) > 0.1), dim=1)
@@ -723,7 +752,7 @@ class LeggedRobot(BaseTask):
         self.last_contacts = contact
         first_contact = (self.feet_air_time > 0.) * contact_filt
         self.feet_air_time += self.dt
-        rew_airTime = torch.sum((self.feet_air_time - 0.8) * first_contact, dim=1) # reward only on first contact with the ground
+        rew_airTime = torch.sum((self.feet_air_time - 0.5) * first_contact, dim=1) # reward only on first contact with the ground
         rew_airTime *= torch.norm(self.commands[:, :2], dim=1) > 0.1 #no reward for zero command
         self.feet_air_time *= ~contact_filt
         return rew_airTime

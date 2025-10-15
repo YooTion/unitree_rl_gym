@@ -1,1 +1,1 @@
-python3 scripts/train.py --resume --headless --task=g1 --run_name v3 --load_run May24_22-11-51_
+python3 scripts/train.py --resume --headless --task=g1_23 --run_name v2 --load_run Jul03_16-24-11_v1

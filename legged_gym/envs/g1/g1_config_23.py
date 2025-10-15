@@ -97,6 +97,7 @@ class G1RoughCfg23( LeggedRobotCfg ):
         
         arm_dof_name = ["shoulder", "elbow", "wrist", ]
         waist_dof_name = ["waist", ]
+        
   
     class rewards( LeggedRobotCfg.rewards ):
         soft_dof_pos_limit = 0.9
@@ -106,35 +107,58 @@ class G1RoughCfg23( LeggedRobotCfg ):
         only_positive_rewards = True
         
         class scales( LeggedRobotCfg.rewards.scales ):
-            tracking_lin_vel = 1.0
+            tracking_lin_vel = 1.5
             tracking_ang_vel = 0.5
-            lin_vel_z = -2.0
+            lin_vel_z = -1.0
             ang_vel_xy = -0.05
             orientation = -1.0
-            base_height = -10.0
+            base_height = -5.0
             dof_acc = -2.5e-7
             dof_vel = -1e-3
-            feet_air_time = 5.0
+            feet_air_time = 2.0
             collision = 0.0
-            action_rate = -0.005
+            action_rate = -0.05
+            # upper_action_rate = -0.01
             dof_pos_limits = -2.0
-            alive = 2.0
+            # alive = 2.0
             hip_pos = -1.0
             contact_no_vel = -0.2
             # feet_swing_height = -20.0
-            contact = 0.18
+            contact = 0.25
             # target_height = 5.0
             # feet_contact_forces = -1
 
             feet_slip = -0.1
-            ankle_dof_pos_limits = -1.0
-            hip_dof_deviation = -0.1
-            arm_dof_deviation = -0.1
-            waist_dof_deviation = -0.1
+            ankle_dof_pos_limits = -0.2
+            hip_dof_deviation = -0.2
+            arm_dof_deviation = -1.0
+            waist_dof_deviation = -1.0
             hip_knee_dof_acc = -1.25e-7
             hip_knee_dof_torques = -2.0e-6
             # termination = -200.0
 
+            no_movement_when_stationary = -0.1
+            large_stride = 5.5
+
+
+# class G1RoughCfgPPO23( LeggedRobotCfgPPO ):
+#     class policy:
+#         init_noise_std = 1.0
+#         actor_hidden_dims = [512, 256, 128]
+#         critic_hidden_dims = [512, 256, 128]
+#         activation = 'elu' # can be elu, relu, selu, crelu, lrelu, tanh, sigmoid
+#         # only for 'ActorCriticRecurrent':
+#         rnn_type = 'gru'
+#         rnn_hidden_size = 64
+#         rnn_num_layers = 1
+        
+#     class algorithm( LeggedRobotCfgPPO.algorithm ):
+#         entropy_coef = 0.01
+#     class runner( LeggedRobotCfgPPO.runner ):
+#         policy_class_name = "ActorCriticRecurrent"
+#         max_iterations = 20000
+#         run_name = ''
+#         experiment_name = 'g1_23'
 
 class G1RoughCfgPPO23( LeggedRobotCfgPPO ):
     class policy:
@@ -143,16 +167,22 @@ class G1RoughCfgPPO23( LeggedRobotCfgPPO ):
         critic_hidden_dims = [512, 256, 128]
         activation = 'elu' # can be elu, relu, selu, crelu, lrelu, tanh, sigmoid
         # only for 'ActorCriticRecurrent':
-        rnn_type = 'gru'
-        rnn_hidden_size = 64
-        rnn_num_layers = 1
+        # rnn_type = 'gru'
+        # rnn_hidden_size = 64
+        # rnn_num_layers = 1
         
     class algorithm( LeggedRobotCfgPPO.algorithm ):
         entropy_coef = 0.01
+        learning_rate = 1e-4
+        num_learning_epochs = 2
+        gamma = 0.994 #0.994 聚焦当下奖励
+        lam = 0.9
+        num_mini_batches = 4
+        
     class runner( LeggedRobotCfgPPO.runner ):
-        policy_class_name = "ActorCriticRecurrent"
+        policy_class_name = "ActorCritic"
+        algorithm_class_name = 'PPO'
         max_iterations = 5000
         run_name = ''
-        experiment_name = 'g1'
-
+        experiment_name = 'g1_23'
   

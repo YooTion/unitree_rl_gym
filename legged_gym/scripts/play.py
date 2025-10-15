@@ -107,7 +107,7 @@ def play(args):
         ])
         
         # 更新相机位置
-        env.set_camera(camera_pos, look_at)
+        # env.set_camera(camera_pos, look_at)
 
 if __name__ == '__main__':
     EXPORT_POLICY = True

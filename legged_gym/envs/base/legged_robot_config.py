@@ -84,10 +84,15 @@ class LeggedRobotCfg(BaseConfig):
         density = 0.001
         angular_damping = 0.
         linear_damping = 0.
+        
         max_angular_velocity = 1000.
         max_linear_velocity = 1000.
-        armature = 0.
+        
         thickness = 0.01
+
+        damping = 0.001
+        armature = 0.01
+        friction_loss = 0.1 
 
     class domain_rand:
         randomize_friction = True
@@ -122,7 +127,7 @@ class LeggedRobotCfg(BaseConfig):
         soft_dof_vel_limit = 1.
         soft_torque_limit = 1.
         base_height_target = 1.
-        max_contact_force = 500. # forces above this value are penalized
+        max_contact_force = 100. # forces above this value are penalized
 
     class normalization:
         class obs_scales:
